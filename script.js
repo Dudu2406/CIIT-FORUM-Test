@@ -47,6 +47,10 @@ const DEF = {
   aw: 1,
   ls: 1,
   css: "",
+  lay: "classic",
+  psz: "balanced",
+  pcw: 0,
+  dm: 1,
 };
 const PRE = {
   Ocean: {},
@@ -100,16 +104,19 @@ const DEMO = { id: "demo", email: "demo@ciit.edu.ph", pw: "ciit1234" },
   DEFAV = "img/Default%20Icon.jpg",
   LBL = { about: "About me", interests: "Interests", photos: "Photos", comments: "Comments", posts: "Posts" },
   GM = [
-    ["edit", "Edit Profile", "Name, bio, and personal information", "✏️"],
-    ["look", "Customize Appearance", "Colors, fonts, and themes", "🎨"],
-    ["photos", "Manage Photos", "Profile picture, banner, and gallery", "🖼️"],
-    ["arrange", "Arrange Sections", "Reorder and hide profile sections", "🗂️"],
-    ["privacy", "Privacy Settings", "Manage profile visibility", "🔒"],
+    ["info", "Profile Information", "Name, bio, status, and quote", "✏️"],
+    ["themes", "Appearance and Themes", "Start from a ready-made theme", "🎨"],
+    ["colors", "Background and Colors", "Colors, image, and patterns", "🌈"],
+    ["style", "Fonts and Typography", "Fonts, text size, and corners", "🔤"],
+    ["media", "Profile and Banner Images", "Picture, banner, and photo gallery", "🖼️"],
+    ["layout", "Profile Layout", "Classic or Centered Timeline, post width", "🧱"],
+    ["arrange", "Section Arrangement", "Reorder and hide profile sections", "🗂️"],
+    ["privacy", "Privacy Settings", "Comments, visibility, and messages", "🔒"],
   ],
   gmenu = () =>
-    `<div class="gm" role="menu" aria-label="Profile Settings"><div class="gh">Profile Settings</div>${GM.map(([k, t, d, i]) => `<button class="gi" role="menuitem" data-a="gm" data-v="${k}"><span aria-hidden="true">${i}</span><span><b>${t}</b><br><small>${d}</small></span><span aria-hidden="true">›</span></button>`).join("")}</div>`;
+    `<div class="gm" role="menu" aria-label="Customize Profile"><div class="gh">Customize Profile</div>${GM.map(([k, t, d, i]) => `<button class="gi" role="menuitem" data-a="gm" data-v="${k}"><span aria-hidden="true">${i}</span><span><b>${t}</b><br><small>${d}</small></span><span aria-hidden="true">›</span></button>`).join("")}</div>`;
 const T = (t) => ({ ...DEF, ...t }),
-  CK = ["n", "bio", "st", "q", "song", "loc", "int", "about", "pv", "aw", "ls"],
+  CK = ["n", "bio", "st", "q", "song", "loc", "int", "about", "pv", "aw", "ls", "dm", "lay", "psz", "pcw"],
   CK2 = [...CK, "ph", "av", "bimg", "order", "hide"];
 const U = (id, n, p, o) => ({ id, n, t: T({ ...PRE[p], ...o }), wall: o.w || [], views: o.vw || 0 });
 const SEED = {
@@ -235,6 +242,7 @@ let S,
     d: { t: "", b: "", c: "Regular post" },
     pop: null,
   };
+Object.assign(V, { ret: null, mfrom: null, enter: 0, fresh: null, page: null, mc: null, ms: "", md: {}, mnew: 0, ptab: "posts", chat: { open: 0, min: 0, cid: null } });
 const load = () => {
   try {
     const s = JSON.parse(localStorage.getItem("ciitf4") || "null");
@@ -264,9 +272,11 @@ const CATS = {
 };
 function normalize() {
   S.show = S.show || { posts: true, people: true };
-  S.posts.forEach((p) => {
+  S.convs = S.convs || seedConvs();
+  S.posts.forEach((p, i) => {
     p.c = CATS[p.c] || p.c;
     p.by = p.by || [];
+    p.ts = p.ts || Date.now() - (i + 1) * 5 * 36e5;
   });
   if (S.me) S.me = S.users.find((u) => u.id === S.me.id) || S.me;
 }
@@ -339,6 +349,106 @@ function bgCSS(t) {
     (L.length ? `background-image:${L.join(",")};background-size:${Z.join(",")};` : "")
   );
 }
+const postW = (t) => (+t.pcw > 0 ? Math.min(960, Math.max(360, +t.pcw)) : { compact: 440, balanced: 640, wide: 880 }[t.psz] || 640),
+  rsz = (w) =>
+    `<div class="rsz" data-rsz role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize post section width. Use the left and right arrow keys." aria-valuemin="360" aria-valuemax="960" aria-valuenow="${w}"></div>`,
+  mobile = () => matchMedia("(max-width:860px)").matches;
+
+/* ---------- Messaging (demo: stored in this browser only; see README for backend needs) ---------- */
+function seedConvs() {
+  const n = Date.now(),
+    H1 = 36e5;
+  return [
+    { id: "demo|u1", p: ["demo", "u1"], rd: { demo: n - 4 * H1 }, hd: {}, m: [
+      { f: "u1", t: "Hey Mochi! Do you have the notes from Thursday’s class?", ts: n - 5 * H1 },
+      { f: "demo", t: "Yep, I’ll upload them tonight.", ts: n - 4 * H1 },
+      { f: "u1", t: "You’re the best 🙏 Are you joining the org fair too?", ts: n - 2 * H1 } ] },
+    { id: "demo|u2", p: ["demo", "u2"], rd: {}, hd: {}, m: [
+      { f: "u2", t: "Love your new profile theme! The Forest look is so cozy 🌿", ts: n - 26 * H1 } ] },
+  ];
+}
+const cid = (a, b) => [a, b].sort().join("|"),
+  curC = () => (V.page == "msgs" ? V.mc : V.chat.cid),
+  getC = (id) => (S.convs || []).find((c) => c.id == id),
+  mkC = (uid) => {
+    const id = cid(S.me.id, uid);
+    let c = getC(id);
+    if (!c) S.convs.push((c = { id, p: [S.me.id, uid], m: [], rd: {}, hd: {} }));
+    return c;
+  },
+  other = (c) => user(c.p.find((x) => x != S.me.id) || c.p[0]),
+  vis = (c) => c.m.filter((m) => m.ts > (c.hd[S.me.id] || 0)),
+  lastTs = (c) => vis(c).slice(-1)[0]?.ts || Date.now(),
+  unr = (c) => vis(c).filter((m) => m.f != S.me.id && m.ts > (c.rd[S.me.id] || 0)).length,
+  myc = () => S.convs.filter((c) => c.p.includes(S.me.id) && (vis(c).length || c.id == curC())).sort((a, b) => lastTs(b) - lastTs(a)),
+  totU = () => S.convs.filter((c) => c.p.includes(S.me.id)).reduce((n, c) => n + unr(c), 0),
+  mark = (c) => {
+    if (c) c.rd[S.me.id] = Date.now();
+    save();
+  },
+  sameDay = (a, b) => new Date(a).toDateString() == new Date(b).toDateString(),
+  fmtT = (ts) => (sameDay(ts, Date.now()) ? new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" })),
+  fmtM = (ts) => (sameDay(ts, Date.now()) ? "" : new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" }) + ", ") + new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+  mcol = () => {
+    const a = T(S.me.t).accent;
+    return rat(on(a), a) >= 4.5 ? a : "#033250";
+  },
+  mvars = () => `--mb:${mcol()};--mt:${on(mcol())};`;
+const pick = () =>
+  `<div class="fr" role="group" aria-label="Start a conversation with">${S.users.filter((u) => u.id != S.me.id && +T(u.t).dm !== 0).map((u) => `<button class="ftile" data-a="mstart" data-v="${u.id}"><img src="${T(u.t).av || DEFAV}" alt=""><span>${esc(u.n)}</span></button>`).join("") || `<span class="mut">No one is available to message.</span>`}</div>`;
+function mlist(an) {
+  const q = (V.ms || "").toLowerCase(),
+    cs = myc().filter((c) => other(c).n.toLowerCase().includes(q));
+  return (
+    cs.map((c) => {
+      const o = other(c), v = vis(c), l = v[v.length - 1], n = unr(c);
+      return `<button class="mrow${c.id == curC() ? " on" : ""}" data-a="${an}" data-v="${c.id}" aria-current="${c.id == curC()}"><span class="av">${avh(o)}</span><span class="mi"><b>${esc(o.n)}${n ? `<span class="sr"> (${n} unread)</span>` : ""}</b><span class="mp${n ? " un" : ""}">${l ? (l.f == S.me.id ? "You: " : "") + esc(l.t) : "No messages yet"}</span></span><span class="mm">${l ? fmtT(l.ts) : ""}${n ? `<span class="bdg" aria-hidden="true">${n}</span>` : ""}</span></button>`;
+    }).join("") ||
+    `<div class="mut" style="padding:12px">${q ? "No conversations match your search." : "No conversations yet. Press ＋ New to start one."}</div>`
+  );
+}
+function mthread(c, id) {
+  const o = other(c), v = vis(c), lo = v.map((m) => m.f == S.me.id).lastIndexOf(true);
+  const log = v.map((m, i) => {
+    const me = m.f == S.me.id;
+    return `${i == 0 || !sameDay(v[i - 1].ts, m.ts) ? `<div class="mday">${new Date(m.ts).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</div>` : ""}<div class="mg ${me ? "me" : "th"}"><div class="mb"><span class="sr">${me ? "You" : esc(o.n)}: </span>${esc(m.t)}</div><div class="mtm">${fmtM(m.ts)}${me && i == lo ? " · Saved on this device" : ""}</div></div>`;
+  }).join("") || `<div class="mut" style="margin:auto;text-align:center">No messages yet. Say hi to ${esc(o.n)} 👋</div>`;
+  const off = +T(o.t).dm === 0;
+  return `<div class="mlog" role="log" aria-live="polite" aria-label="Messages with ${esc(o.n)}" tabindex="0">${log}</div>${off ? `<div class="mcomp mut">${esc(o.n)} has turned messages off, so you can’t send new ones.</div>` : `<div class="mcomp"><input id="${id}" maxlength="500" autocomplete="off" placeholder="Write a message… (Enter to send)" aria-label="Message to ${esc(o.n)}" value="${esc(V.md[c.id] || "")}"><button class="btn" data-a="msend">Send</button></div><div class="err" id="merr" role="alert" style="padding:0 12px 6px"></div>`}`;
+}
+function mpHTML() {
+  const c = getC(V.mc), o = c && other(c);
+  return `<div class="mgrid${c ? " has" : ""}"><section class="mpn mlistp" style="${mvars()}" aria-label="Conversations"><div class="mph"><button class="ib" data-a="mexit" aria-label="Back to forum">←</button><b style="flex:1;font-size:18px">Messages</b><button class="btn sm" data-a="mnew" aria-expanded="${!!V.mnew}">＋ New</button></div>${V.mnew ? `<div class="mpick">${pick()}</div>` : ""}<div style="padding:0 10px 8px"><input id="ms" type="search" placeholder="Search conversations" aria-label="Search conversations" value="${esc(V.ms || "")}"></div><div id="mlist" class="mlist">${mlist("mopen")}</div><div class="demo" style="margin:8px">Demo mode: messages are saved only in this browser. Delivery between real accounts needs a backend.</div></section><section class="mpn mthread" style="${mvars()}" aria-label="Conversation">${c ? `<div class="mph"><button class="ib mbk" data-a="mback" aria-label="Back to conversations">←</button><span class="av">${avh(o)}</span><b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(o.n)}</b><button class="btn sm g" data-a="visit" data-v="${o.id}">View profile</button><button class="btn sm g" data-a="mdel" data-v="${c.id}" aria-label="Delete conversation with ${esc(o.n)}">Delete</button></div>${mthread(c, "mi")}` : `<div class="mempty">Select a conversation, or press ＋ New to start one.</div>`}</section></div>`;
+}
+const IP = {
+    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+    profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+    people: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.6 3-6 7-6s7 2.4 7 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.2c2.3.7 4 2.5 4 5.8"/>',
+    msgs: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  },
+  ico = (k) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${IP[k]}</svg>`,
+  curNav = () => (V.page == "msgs" ? "msgs" : V.page == "home" ? "home" : V.page == "people" ? "people" : V.view && V.view != S.me.id ? V.ret || "" : "profile"),
+  navB = (k, l) => `<button class="nv" data-a="nav" data-v="${k}"${curNav() == k ? ' aria-current="page"' : ""}>${ico(k)}<span>${l}</span></button>`;
+const navM = () => {
+  const n = totU();
+  return `<button class="nv" id="mnav" data-a="msgpage" aria-label="Messages${n ? `, ${n} unread` : ""}"${curNav() == "msgs" ? ' aria-current="page"' : ""}>${ico("msgs")}<span>Messages</span>${n ? `<span class="bdg" aria-hidden="true">${n}</span>` : ""}</button>`;
+};
+const navHTML = () => `<nav class="mnv" aria-label="Main">${navB("home", "Home")}${navB("profile", "Profile")}${navB("people", "People")}${navM()}</nav>`;
+function chatHTML() {
+  if (!S.me || V.page == "msgs") return "";
+  const n = totU(), c = V.chat;
+  if (!c.open) return `<button class="btn cfab" data-a="cht" aria-label="Open chat${n ? `, ${n} unread` : ""}"><span aria-hidden="true">💬</span> Chat${n ? `<span class="bdg" aria-hidden="true">${n}</span>` : ""}</button>`;
+  const cv = getC(c.cid), o = cv && other(cv);
+  return `<section class="cw${c.min ? " min" : ""}" style="${mvars()}" aria-label="Chat window"><div class="cwh">${cv && !c.min ? `<button class="ib" data-a="cback" aria-label="Back to all chats">←</button>` : ""}<b class="cwt">${cv ? esc(o.n) : "Messages"}${n && (c.min || !cv) ? `<span class="bdg" aria-label="${n} unread">${n}</span>` : ""}</b><button class="ib" data-a="cmin" aria-label="${c.min ? "Expand chat" : "Minimize chat"}" aria-expanded="${!c.min}">${c.min ? "▢" : "–"}</button><button class="ib" data-a="cmax" aria-label="Open in full Messages page">⤢</button><button class="ib" data-a="ccls" aria-label="Close chat">✕</button></div>${c.min ? "" : `<div class="cwb">${cv ? mthread(cv, "ci") : `<div class="cwtop"><input id="ms" type="search" placeholder="Search conversations" aria-label="Search conversations" value="${esc(V.ms || "")}"><button class="btn sm" data-a="mnew" aria-expanded="${!!V.mnew}">＋ New</button></div>${V.mnew ? `<div class="mpick">${pick()}</div>` : ""}<div id="mlist" class="mlist">${mlist("copen")}</div>`}</div>`}</section>`;
+}
+function mr(f) {
+  const n = $("#mnav"), p = $("#mp"), c = $("#chat");
+  if (n) n.outerHTML = navM();
+  if (p) p.innerHTML = mpHTML();
+  if (c) c.innerHTML = chatHTML();
+  document.querySelectorAll(".mlog").forEach((l) => (l.scrollTop = l.scrollHeight));
+  if (f) $(f)?.focus();
+}
 const sideBg = (t) => `color-mix(in srgb,${t.accent} 28%,#0f1b24)`;
 function prof(u, t0, ed, plain) {
   const t = T(t0),
@@ -354,6 +464,15 @@ function prof(u, t0, ed, plain) {
   const ln = (ic, k) => (t[k] || ed ? `<div>${ic} <span ${e(k)}>${esc(t[k])}</span></div>` : "");
   const posts = S.posts.filter((p) => p.u === u.id),
     mine = u.id === S.me.id;
+  const W = postW(t),
+    cardT = `background:${dk ? "rgba(18,24,38," : "rgba(255,255,255,"}${Math.max(+s.op, 88) / 100});color:${ink};border-radius:${s.rad}px;`,
+    pcards = (tl) =>
+      posts
+        .map((p) => {
+          const a = user(p.u);
+          return `<article class="pcard${tl ? " tlp" : ""}" style="${tl ? cardT : ""}"><div class="pm pmh"><span class="av xs">${avh(a)}</span><b>${esc(a.n)}</b><span class="tag" data-c="${esc(p.c)}">${esc(p.c)}</span></div><h4>${esc(p.t)}</h4><p>${esc(p.b)}</p><div class="pm">♥ ${p.l} likes · 💬 ${p.cm.length} comments</div></article>`;
+        })
+        .join("") || `<span class="pm">No posts yet.</span>`;
   const B = {
     about: () => `<h3>About me</h3><p style="margin:0" ${e("about")}>${esc(t.about)}</p>`,
     interests: () =>
@@ -378,18 +497,27 @@ function prof(u, t0, ed, plain) {
           })
           .join("") || `<span class="mut">No comments yet.</span>`
       }${ed || mine ? "" : !+t.aw ? `<div class="mut">${esc(nm)} has turned off comments on this profile.</div>` : `<div style="display:flex;gap:6px;margin-top:8px"><input id="wc" maxlength="200" placeholder="Write a comment (Enter to send)" aria-label="Comment"><button class="btn" data-a="wall">Send</button></div>`}`,
-    posts: () =>
-      `<h3>Posts</h3>${posts.map((p) => `<div>• ${esc(p.t)}</div>`).join("") || `<span class="mut">No posts yet.</span>`}`,
+    posts: () => `<h3>Posts</h3>${pcards(0)}`,
   };
   const ban = t.bimg ? `url(${t.bimg}) center/cover` : s.ban || s.accent,
-    gear = mine && !ed ? `<button class="gear" data-a="gear" aria-label="Profile settings" aria-haspopup="true" aria-expanded="${!!V.menu}">⚙</button>${V.menu ? gmenu() : ""}` : "";
-  return `<div id="pw" style="font-family:${FONTS[s.font]};font-size:${s.sz}px;${plain ? "" : safe(t.css)}"><section class="pf">${gear}<div class="pcol"><div class="port" style="border-color:${s.accent}"><img src="${t.av || DEFAV}" alt="Profile picture of ${esc(nm)}"></div><div class="dt" style="${card}">${ln("🎓", "bio")}${ln("📍", "loc")}${ln("🎵", "song")}</div></div><div class="pmain" style="${card}overflow:hidden"><div class="ban" style="background:${ban}"></div><div class="pinfo"><h1 style="color:${s.name}" ${e("n")}>${esc(nm)}</h1><div class="qbox" style="border-color:${s.accent}">${ln("💬", "st")}${ln("❝", "q")}</div></div></div></section>
+    gear = mine && !ed ? `<button class="gear" data-a="gear" data-tip="Customize Profile" aria-label="Customize Profile" aria-haspopup="true" aria-expanded="${!!V.menu}"><img src="img/Gear.jpg" alt="" width="30" height="30"></button>${V.menu ? gmenu() : ""}` : "",
+    st = `font-family:${FONTS[s.font]};font-size:${s.sz}px;--pw:${W}px;${plain ? "" : safe(t.css)}`,
+    port = `<div class="port" style="border-color:${s.accent}"><img src="${t.av || DEFAV}" alt="Profile picture of ${esc(nm)}"></div>`,
+    ids = [ln("🎓", "bio"), ln("📍", "loc"), ln("🎵", "song")].join(""),
+    qb = `<div class="qbox" style="border-color:${s.accent}">${ln("💬", "st")}${ln("❝", "q")}</div>`;
+  if (t.lay == "timeline") {
+    const vs = t.order.filter((k) => !t.hide.includes(k)),
+      TM = { about: "about", interests: "about", photos: "photos", comments: "comments", posts: "posts" },
+      TN = { posts: "Posts", about: "About", photos: "Photos", comments: "Comments" },
+      tk = [...new Set(vs.map((k) => TM[k]))],
+      cur = tk.includes(V.ptab) ? V.ptab : tk[0],
+      body = cur == "posts" ? pcards(1) : vs.filter((k) => TM[k] == cur).map((k) => `<section class="blk" style="${cardT}">${B[k]()}</section>`).join("");
+    return `<div id="pw" class="lay-tl" style="${st}"><section class="tlh" style="${cardT}">${gear}<div class="ban" style="background:${ban};border-radius:${s.rad}px ${s.rad}px 0 0"></div><div class="tlr">${port}<div class="tli"><h1 style="color:${s.name}" ${e("n")}>${esc(nm)}</h1><div class="tlm">${ids}</div>${qb}</div></div></section><div class="tltabs" role="tablist" aria-label="Profile sections" style="${cardT}">${tk.map((k) => `<button class="tab" role="tab" data-a="ptab" data-v="${k}" aria-selected="${k == cur}" style="${k == cur ? `background:${s.accent};color:${on(s.accent)};border-color:${s.accent}` : ""}">${TN[k]}</button>`).join("")}</div><div class="tlc" role="tabpanel">${body}</div>${ed ? rsz(W) : ""}</div>`;
+  }
+  return `<div id="pw" class="lay-cl" style="${st}"><section class="pf"><div class="pcol">${port}<div class="dt" style="${card}">${ids}</div></div><div class="pmw">${gear}<div class="pmain" style="${card}overflow:hidden"><div class="ban" style="background:${ban}"></div><div class="pinfo"><h1 style="color:${s.name}" ${e("n")}>${esc(nm)}</h1>${qb}</div></div></div></section>
  <div class="blks">${t.order
    .filter((k) => !t.hide.includes(k))
-   .map(
-     (k) =>
-       `<section class="blk ${k == "photos" || k == "comments" ? "span" : ""}" style="${card}">${B[k]()}</section>`,
-   )
+   .map((k) => `<section class="blk ${k == "photos" || k == "comments" ? "span" : k == "posts" ? "span pblk" : ""}" style="${card}">${B[k]()}${k == "posts" && ed ? rsz(W) : ""}</section>`)
    .join("")}</div></div>`;
 }
 function warn(d) {
@@ -405,14 +533,15 @@ function warn(d) {
     : `<span class="ok">✓ Everything is readable</span>`;
 }
 const PN = [
-  ["info", "📝 Info"],
-  ["themes", "🎨 Themes"],
+  ["info", "Profile Info"],
+  ["themes", "Themes"],
   ["colors", "Colors"],
   ["bg", "Background"],
-  ["style", "Style"],
-  ["media", "Media"],
-  ["blocks", "Blocks"],
-  ["privacy", "🔒 Privacy"],
+  ["style", "Fonts"],
+  ["media", "Images"],
+  ["layout", "Layout"],
+  ["blocks", "Sections"],
+  ["privacy", "Privacy"],
   ["adv", "Advanced"],
 ];
 function barHTML(own, vu) {
@@ -427,7 +556,7 @@ function barHTML(own, vu) {
     );
   return own
     ? ""
-    : `<button class="btn sm" data-a="back">← Back to my profile</button>`;
+    : `<button class="btn sm g" data-a="back">← Back to ${{ home: "Home", people: "People", msgs: "Messages" }[V.ret] || "my profile"}</button> ${+T(vu.t).dm === 0 ? `<button class="btn sm" disabled title="${esc(vu.n)} has turned messages off">✉ Messages off</button>` : `<button class="btn sm" data-a="mstart" data-v="${vu.id}">✉ Message ${esc(vu.n)}</button>`}`;
 }
 function panel() {
   const d = V.edit,
@@ -445,7 +574,8 @@ function panel() {
   const I = (k, l, m) => `<label>${l}<input data-k="${k}" maxlength="${m}" value="${esc(d[k])}"></label>`;
   const M = {
     info: `<div class="pn">${I("n", "Display name", 30)}${I("bio", "Course / year", 40)}${I("loc", "Location", 40)}${I("st", "Status", 60)}${I("q", "Favorite quote", 80)}${I("song", "Now playing", 40)}</div><label>About me<textarea rows="2" maxlength="200" data-k="about">${esc(d.about)}</textarea></label>`,
-    privacy: `<div class="pn">${Sl("aw", "Comments from others", [[1, "Allowed"], [0, "Turned off"]])}${Sl("ls", "Show me in Friends & people", [[1, "Yes"], [0, "No, hide me"]])}</div><div class="mut" style="color:#566873">Changes apply after you press Save.</div>`,
+    layout: `<b>Profile layout</b><div class="lays" role="group" aria-label="Profile layout">${[["classic", "Classic Layout", "Friendster-style portrait, details and sections around your posts.", "▤"], ["timeline", "Centered Timeline Layout", "Compact header, then your posts in one centered column over your background.", "☰"]].map(([k, l, x, i]) => `<button class="lay${d.lay == k ? " on" : ""}" data-a="lay" data-v="${k}" aria-pressed="${d.lay == k}"><span aria-hidden="true" class="li">${i}</span><b>${l}</b><small>${x}</small></button>`).join("")}</div><b>Post section width</b><div class="tabs" role="group" aria-label="Post section width" style="margin-top:6px">${[["compact", "Compact"], ["balanced", "Balanced"], ["wide", "Wide"]].map(([k, l]) => `<button class="tab" data-a="psz" data-v="${k}" aria-pressed="${d.psz == k && !+d.pcw}">${l}</button>`).join("")}</div><label>Fine-tune width: <span id="v_pcw">${postW(d)}</span> px<input type="range" min="360" max="960" step="10" data-k="pcw" value="${postW(d)}"></label><div class="mut" style="color:#566873">On desktop you can also drag the handle on the right edge of your posts. On phones the width always fits the screen. Switching layouts never deletes your info or posts. Press Save to keep your choice.</div>`,
+    privacy: `<div class="pn">${Sl("aw", "Comments from others", [[1, "Allowed"], [0, "Turned off"]])}${Sl("ls", "Show me in Friends & people", [[1, "Yes"], [0, "No, hide me"]])}${Sl("dm", "Who can message me", [[1, "Anyone in the forum"], [0, "No one (messages off)"]])}</div><div class="mut" style="color:#566873">Changes apply after you press Save.</div>`,
     themes: `<b>Start from a theme (your text and photos are kept)</b><div class="tabs" style="margin-top:6px">${Object.keys(
       PRE,
     )
@@ -496,48 +626,78 @@ function likeBtn(p) {
   return `<button class="btn sm g${V.pop == p.id ? " pop" : ""}" data-a="like" data-v="${p.id}" aria-pressed="${liked}" style="${liked ? "color:#e0245e;border-color:#e0245e" : ""}">${liked ? "❤️ Liked" : "♡ Like"}</button>`;
 }
 const CI = { Concern: "❓", "Org Board": "📌", "Regular post": "💬" };
-function bodyPosts() {
+const ago = (ts) => {
+    if (!ts) return "";
+    const d = (Date.now() - ts) / 1000;
+    return d < 60 ? "Just now" : d < 3600 ? Math.floor(d / 60) + "m ago" : d < 86400 ? Math.floor(d / 3600) + "h ago" : d < 604800 ? Math.floor(d / 86400) + "d ago" : new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+  },
+  fullT = (ts) => new Date(ts).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+function bodyPosts(f) {
   const q = V.q.toLowerCase(),
-    all = S.posts.filter((p) => (p.t + p.b + p.c + user(p.u).n).toLowerCase().includes(q)),
+    all = S.posts.filter((p) => (p.t + p.b + p.c + user(p.u).n).toLowerCase().includes(q)).sort((a, b) => (f ? (b.ts || 0) - (a.ts || 0) : 0)),
     ps = all.filter((p) => V.cat == "All" || p.c == V.cat),
-    shown = ps.slice(0, V.more ? 99 : 3),
-    d = V.d;
+    shown = f ? ps : ps.slice(0, V.more ? 99 : 3),
+    d = V.d,
+    w = f ? "post" : "thread";
+  const form = `<div class="card"><b>New post</b><label for="pt">Title <span class="cnt" id="ptc">${d.t.length}/80</span></label><input id="pt" maxlength="80" value="${esc(d.t)}" aria-describedby="pe"><label for="pb">Message <span class="cnt" id="pbc">${d.b.length}/500</span></label><textarea id="pb" rows="3" maxlength="500" aria-describedby="pe" placeholder="What’s on your mind? (Ctrl+Enter to post)">${esc(d.b)}</textarea><label for="pc">Category</label><select id="pc">${Object.keys(CI).map((c) => `<option ${d.c == c ? "selected" : ""}>${c}</option>`).join("")}</select><div class="mut" style="margin-top:4px">Concern = a question or problem · Org Board = announcements · Regular post = everything else</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-a="post">Post</button><button class="btn g" data-a="comp">Cancel</button></div><div class="err" id="pe" role="alert"></div></div>`;
   const comp = V.comp
-    ? `<div class="card"><b>New post</b><label for="pt">Title <span class="cnt" id="ptc">${d.t.length}/80</span></label><input id="pt" maxlength="80" value="${esc(d.t)}" aria-describedby="pe"><label for="pb">Message <span class="cnt" id="pbc">${d.b.length}/500</span></label><textarea id="pb" rows="3" maxlength="500" aria-describedby="pe" placeholder="What’s on your mind? (Ctrl+Enter to post)">${esc(d.b)}</textarea><label for="pc">Category</label><select id="pc">${Object.keys(CI).map((c) => `<option ${d.c == c ? "selected" : ""}>${c}</option>`).join("")}</select><div class="mut" style="margin-top:4px">Concern = a question or problem · Org Board = announcements · Regular post = everything else</div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-a="post">Post</button><button class="btn g" data-a="comp">Cancel</button></div><div class="err" id="pe" role="alert"></div></div>`
-    : `<button class="btn" data-a="comp" style="margin-bottom:10px">＋ New post</button>`;
+    ? form
+    : f
+      ? `<div class="card fprompt"><span class="av md" aria-hidden="true">${avh(S.me)}</span><span class="mut fpt">What’s on your mind, ${esc(S.me.n)}?</span><button class="btn" data-a="comp">＋ New post</button></div>`
+      : `<button class="btn" data-a="comp" style="margin-bottom:10px">＋ New post</button>`;
   const chips = `<div class="tabs" role="group" aria-label="Filter by category">${["All", ...Object.keys(CI)].map((c) => `<button class="tab" data-a="cat" data-v="${c}" aria-pressed="${V.cat == c}">${CI[c] ? CI[c] + " " : ""}${c}</button>`).join("")}</div>`;
-  const status = `<div class="mut" role="status" aria-live="polite" style="margin:0 0 8px">Showing ${shown.length} of ${ps.length} thread${ps.length == 1 ? "" : "s"}${V.q ? ` for “${esc(V.q)}”` : ""}</div>`;
+  const status = `<div class="mut" role="status" aria-live="polite" style="margin:0 0 8px">Showing ${shown.length} of ${ps.length} ${w}${ps.length == 1 ? "" : "s"}${V.q ? ` for “${esc(V.q)}”` : ""}</div>`;
   const list = shown
     .map((p) => {
       const a = user(p.u),
-        o = V.open === p.id;
-      return `<article class="card"><span class="tag" data-c="${esc(p.c)}"><span aria-hidden="true">${CI[p.c] || ""}</span> ${esc(p.c)}</span>${p.u == S.me.id ? ' <span class="tag">You</span>' : ""}<h3 style="margin:6px 0 2px;font-size:18px">${esc(p.t)}</h3><div class="clip">${esc(p.b)}</div><div class="mut"><a href="#" data-a="visit" data-v="${a.id}" style="color:var(--cyd)">${esc(a.n)}</a> · ${p.l} likes · ${p.cm.length} comments</div><div style="margin-top:6px">${likeBtn(p)} <button class="btn sm g" data-a="open" data-v="${p.id}" aria-expanded="${o}">💬 ${o ? "Hide" : "Comments"}</button></div>${
-        o
-          ? p.cm
-              .map((c) => {
-                const w = user(c.u);
-                return `<div class="cm" style="${bub(w)}"><b style="color:${T(w.t).name}">${esc(w.n)}</b><br>${esc(c.t)}</div>`;
-              })
-              .join("") +
-            `<div style="display:flex;gap:6px;margin-top:6px"><input id="cc" placeholder="Write a comment (Enter to send)" aria-label="Comment"><button class="btn" data-a="cmt" data-v="${p.id}">Send</button></div>`
-          : ""
-      }</article>`;
+        o = V.open === p.id,
+        cms = o
+          ? p.cm.map((c) => {
+              const x = user(c.u);
+              return `<div class="cm" style="${bub(x)}"><b style="color:${T(x.t).name}">${esc(x.n)}</b><br>${esc(c.t)}</div>`;
+            }).join("") + `<div style="display:flex;gap:6px;margin-top:6px"><input id="cc" placeholder="Write a comment (Enter to send)" aria-label="Comment"><button class="btn" data-a="cmt" data-v="${p.id}">Send</button></div>`
+          : "";
+      if (f)
+        return `<article class="card fcard${V.fresh == p.id ? " fresh" : ""}" aria-labelledby="ft${p.id}"><header class="fh"><button class="avb" data-a="visit" data-v="${a.id}" aria-label="View ${esc(a.n)}’s profile"><span class="av md">${avh(a)}</span></button><div class="fm"><a href="#" data-a="visit" data-v="${a.id}" class="fn">${esc(a.n)}</a>${p.u == S.me.id ? ' <span class="tag">You</span>' : ""}<div class="mut"><time datetime="${new Date(p.ts).toISOString()}" title="${esc(fullT(p.ts))}">${ago(p.ts)}</time></div></div><span class="tag" data-c="${esc(p.c)}"><span aria-hidden="true">${CI[p.c] || ""}</span> ${esc(p.c)}</span></header><h3 id="ft${p.id}" class="ftt">${esc(p.t)}</h3><p class="fb">${esc(p.b)}</p><div class="mut fct">♥ ${p.l} ${p.l == 1 ? "like" : "likes"} · 💬 ${p.cm.length} ${p.cm.length == 1 ? "comment" : "comments"}</div><div class="fa">${likeBtn(p)} <button class="btn sm g" data-a="open" data-v="${p.id}" aria-expanded="${o}">💬 ${o ? "Hide comments" : "Comment"}</button></div>${cms}</article>`;
+      return `<article class="card"><span class="tag" data-c="${esc(p.c)}"><span aria-hidden="true">${CI[p.c] || ""}</span> ${esc(p.c)}</span>${p.u == S.me.id ? ' <span class="tag">You</span>' : ""}<h3 style="margin:6px 0 2px;font-size:18px">${esc(p.t)}</h3><div class="clip">${esc(p.b)}</div><div class="mut"><a href="#" data-a="visit" data-v="${a.id}" style="color:var(--cyd)">${esc(a.n)}</a> · ${p.l} likes · ${p.cm.length} comments</div><div style="margin-top:6px">${likeBtn(p)} <button class="btn sm g" data-a="open" data-v="${p.id}" aria-expanded="${o}">💬 ${o ? "Hide" : "Comments"}</button></div>${cms}</article>`;
     })
     .join("");
-  const empty = `<div class="card mut">No threads match${V.q ? ` “${esc(V.q)}”` : ""}${V.cat != "All" ? ` in ${esc(V.cat)}` : ""}. <button class="btn sm g" data-a="clr">Clear search &amp; filters</button></div>`;
-  return (
-    comp + chips + status + (list || empty) +
-    (ps.length > 3 ? `<button class="btn sm g" data-a="more">${V.more ? "Show less" : "Show " + (ps.length - 3) + " more"}</button>` : "")
-  );
+  const empty = `<div class="card mut">No ${w}s match${V.q ? ` “${esc(V.q)}”` : ""}${V.cat != "All" ? ` in ${esc(V.cat)}` : ""}. <button class="btn sm g" data-a="clr">Clear search &amp; filters</button></div>`;
+  return f
+    ? comp + `<div class="fbar">${chips}${status}</div>` + (list || empty)
+    : comp + chips + status + (list || empty) + (ps.length > 3 ? `<button class="btn sm g" data-a="more">${V.more ? "Show less" : "Show " + (ps.length - 3) + " more"}</button>` : "");
 }
 function bodyPeople() {
   const q = V.q.toLowerCase(),
     l = S.users.filter((u) => u.id !== S.me.id && +T(u.t).ls !== 0 && u.n.toLowerCase().includes(q));
   return `<h3 style="margin:0 0 8px">Friends <span class="mut">${l.length}</span></h3><div class="fr">${l.map((u) => `<button class="ftile" data-a="visit" data-v="${u.id}"><img src="${T(u.t).av || DEFAV}" alt=""><span>${esc(u.n)}</span></button>`).join("") || `<span class="mut">No people match.</span>`}</div>`;
 }
+const rulesBlock = () => `<div class="card"><button class="btn g sm" data-a="rules" aria-expanded="${S.rules}">${S.rules ? "▾" : "▸"} Rules</button>${S.rules ? `<ul><li>Be respectful</li><li>No harassment or hate speech</li><li>No spam or unauthorized selling</li></ul>` : ""}</div>`;
+function pgVars(t) {
+  const dk = t.card == "dark",
+    o = Math.max(+t.op, 92) / 100;
+  return (dk ? `--card:rgba(18,24,38,${o});--tx:#f2f6f8;--mut:#b6c8d2;--bd:rgba(255,255,255,.22);--cyd:#8fdcf8;--soft:rgba(255,255,255,.14);` : `--card:rgba(255,255,255,${o});--tx:#12212b;--mut:#566873;--bd:rgba(0,0,0,.14);--cyd:#0b6f93;--soft:#dff3fb;`) + mvars() + `font-family:${FONTS[t.font] || FONTS.Default};--r:${Math.min(+t.rad, 20)}px;`;
+}
+function feedBody() {
+  return bodyPosts(1) + rulesBlock() + `<div style="text-align:center;margin-bottom:12px"><button class="btn g sm" data-a="reset">Reset demo data</button></div>`;
+}
+function peopleBody() {
+  const q = V.q.toLowerCase(),
+    l = S.users.filter((u) => u.id !== S.me.id && +T(u.t).ls !== 0 && (u.n + " " + T(u.t).bio + " " + T(u.t).loc).toLowerCase().includes(q));
+  return `<div class="mut" role="status" aria-live="polite" style="margin:0 0 10px">${l.length} ${l.length == 1 ? "person" : "people"}${V.q ? ` match “${esc(V.q)}”` : " in the CIIT community"}</div><div class="pgrid">${l.map((u) => { const t = T(u.t); return `<article class="card pcd" style="border-top:5px solid ${t.accent}"><button class="avb" data-a="visit" data-v="${u.id}" aria-label="View ${esc(u.n)}’s profile"><span class="av lg">${avh(u)}</span></button><div class="pci"><a href="#" data-a="visit" data-v="${u.id}" class="fn">${esc(u.n)}</a><div class="mut">${esc(t.bio) || "CIIT student"}</div>${t.st ? `<div class="mut">💬 ${esc(t.st)}</div>` : ""}</div><div class="pca"><button class="btn sm g" data-a="visit" data-v="${u.id}">View profile</button>${+t.dm === 0 ? `<button class="btn sm" disabled title="${esc(u.n)} has turned messages off">✉ Messages off</button>` : `<button class="btn sm" data-a="mstart" data-v="${u.id}">✉ Message</button>`}</div></article>`; }).join("") || `<div class="card mut" style="grid-column:1/-1">No one matches. <button class="btn sm g" data-a="clr">Clear search</button></div>`}</div>`;
+}
+function homePage() {
+  const t = T(S.me.t), pe = V.page == "people", en = V.enter ? " enter" : "";
+  return `<main id="main" tabindex="-1" class="pgm" style="${bgCSS(t)}"><div class="feed${en}" style="${pgVars(t)}"><section class="card fhd"><h1>${pe ? "People" : "Home"}</h1><p class="mut" style="margin:2px 0 0">${pe ? "Discover students and school staff. Open a profile or say hi." : "The latest from students, organizations and school staff."}</p></section><div id="fd">${pe ? peopleBody() : feedBody()}</div></div></main>`;
+}
+const refreshQ = () => {
+  const f = $("#fd"), s = $("#side");
+  if (f) f.innerHTML = V.page == "people" ? peopleBody() : feedBody();
+  else if (s) s.innerHTML = sideInner();
+};
 function sideInner() {
   const sh = S.show,
-    hint = S.hint !== false ? `<div class="card"><b>Welcome! 3 quick steps</b><ol style="margin:6px 0;padding-left:20px"><li>Open <b>Edit profile</b> and make your page your own</li><li>Open a thread and leave a comment</li><li>Ask a question under <b>Concern</b></li></ol><button class="btn sm" data-a="hint">Got it, hide this</button></div>` : "";
+    hint = S.hint !== false ? `<div class="card"><b>Welcome! 3 quick steps</b><ol style="margin:6px 0;padding-left:20px"><li>Press the <b>⚙ gear</b> on your banner to make your page your own</li><li>Open a thread and leave a comment</li><li>Ask a question under <b>Concern</b></li></ol><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-a="nav" data-v="home">Go to Home Feed →</button><button class="btn sm g" data-a="hint">Got it, hide this</button></div></div>` : "";
   return hint + `<div class="tabs" role="group" aria-label="Sections">${[
     ["posts", "Posts"],
     ["people", "People"],
@@ -549,7 +709,7 @@ function sideInner() {
     .join(
       "",
     )}</div><div id="sb">${sh.posts ? `<div>${bodyPosts()}</div>` : ""}${sh.people ? `<div style="margin-bottom:12px">${bodyPeople()}</div>` : ""}</div>
- <div class="card"><button class="btn g sm" data-a="rules" aria-expanded="${S.rules}">${S.rules ? "▾" : "▸"} Rules</button>${S.rules ? `<ul><li>Be respectful</li><li>No harassment or hate speech</li><li>No spam or unauthorized selling</li></ul>` : ""}</div><button class="btn g sm" data-a="reset">Reset demo data</button>`;
+ ${rulesBlock()}<button class="btn g sm" data-a="reset">Reset demo data</button>`;
 }
 function render() {
   const a = $("#app");
@@ -562,12 +722,14 @@ function render() {
     own = !V.view || V.view == S.me.id,
     vu = own ? S.me : user(V.view),
     t = V.edit || T(vu.t);
-  a.innerHTML = `<a class="skip" href="#main">Skip to content</a><header class="hdr"><a href="#" class="brand" data-a="home" aria-label="CIIT Forum home"><span aria-hidden="true">☺</span> ciit forum</a><input id="q" type="search" placeholder="Search threads, people… (press /)" aria-label="Search threads and people" value="${esc(V.q)}"><span class="sp"></span><span style="color:#cfe3ec">Signed in as <strong>${esc(S.me.n)}</strong></span><button class="btn g sm" data-a="out">Log out</button></header>
- <div class="mt"><button class="tab" data-a="mt" data-v="profile" aria-selected="${V.tab == "profile"}">Profile</button><button class="tab" data-a="mt" data-v="feed" aria-selected="${V.tab == "feed"}">Feed</button></div>
+  a.innerHTML = `<a class="skip" href="#main">Skip to content</a><header class="hdr"><a href="#" class="brand" data-a="home" aria-label="CIIT Forum home">CIIT Forum</a><input id="q" type="search" placeholder="${V.page =="people" ?"Search people…" :"Search posts, people… (press /)"}" aria-label="Search threads and people" value="${esc(V.q)}"><span class="sp"></span>${navHTML()}<span class="who" style="color:#cfe3ec">Signed in as <strong>${esc(S.me.n)}</strong></span><button class="btn g sm" data-a="out">Log out</button></header>
+ ${V.page == "home" || V.page == "people" ? homePage() : V.page == "msgs" ? `<div class="mpg" style="${bgCSS(T(S.me.t))}"><div id="mp">${mpHTML()}</div></div>` : `<div class="mt"><button class="tab" data-a="mt" data-v="profile" aria-selected="${V.tab == "profile"}">Profile</button><button class="tab" data-a="mt" data-v="feed" aria-selected="${V.tab == "feed"}">Feed</button></div>
  <div class="wrap"><main id="main" tabindex="-1" class="${V.tab == "feed" ? "hid" : ""}" style="${bgCSS(own || !V.plain ? t : T({}))}">${V.edit || !own ? `<div class="bar" id="bar">${barHTML(own, vu)}</div>` : ""}<div id="panel">${V.edit ? panel() : ""}</div><div id="pvw">${prof(vu, t, !!V.edit, V.plain && !own)}</div>${V.edit ? `<div class="sv"><button class="btn" data-a="save">Save</button><button class="btn g" data-a="cancel">Cancel</button><button class="btn g" data-a="def">Reset to default</button><span id="dirty" class="mut" style="color:#566873" role="status">No changes yet</span> <span id="warn">${warn(V.edit)}</span></div>` : ""}</main>
- <aside id="side" aria-label="Forum threads and people" class="${V.tab == "profile" ? "hid" : ""}" style="background:${sideBg(t)}">${sideInner()}</aside></div>`;
-  if (sm) $("#main").scrollTop = sm;
-  if (sa) $("#side").scrollTop = sa;
+ <aside id="side" aria-label="Forum threads and people" class="${V.tab == "profile" ? "hid" : ""}" style="background:${sideBg(t)}">${sideInner()}</aside></div>`}<div id="chat">${chatHTML()}</div>`;
+  V.enter = 0;
+  if (sm && $("#main")) $("#main").scrollTop = sm;
+  if (sa && $("#side")) $("#side").scrollTop = sa;
+  document.querySelectorAll(".mlog").forEach((l) => (l.scrollTop = l.scrollHeight));
 }
 function pv() {
   const d = V.edit;
@@ -599,15 +761,31 @@ window.addEventListener("beforeunload", (e) => {
 document.addEventListener("keydown", (e) => {
   const t = e.target, typing = /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable;
   if (e.key == "/" && !typing && $("#q")) { e.preventDefault(); $("#q").focus(); return; }
+  if ((e.key == "ArrowDown" || e.key == "ArrowUp") && t.classList?.contains("gi")) {
+    e.preventDefault();
+    const it = [...document.querySelectorAll(".gi")], i = it.indexOf(t) + (e.key == "ArrowDown" ? 1 : -1);
+    it[(i + it.length) % it.length].focus();
+    return;
+  }
+  if ((e.key == "ArrowLeft" || e.key == "ArrowRight") && t.dataset?.rsz !== undefined && V.edit) {
+    e.preventDefault();
+    V.edit.pcw = Math.min(960, Math.max(360, postW(V.edit) + (e.key == "ArrowRight" ? 20 : -20)));
+    V.edit.psz = "custom";
+    pv();
+    rp();
+    $("[data-rsz]")?.focus();
+    return;
+  }
   if (e.key == "Escape") {
+    if (V.chat.open && t.closest && t.closest("#chat")) { act("ccls"); return; }
     if (V.menu) { V.menu = false; render(); $('[data-a="gear"]')?.focus(); }
     else if (V.edit) act("cancel");
     else if (V.comp) act("comp");
-    else if (t.id == "q" && V.q) { V.q = ""; t.value = ""; $("#side").innerHTML = sideInner(); }
+    else if (t.id == "q" && V.q) { V.q = ""; t.value = ""; refreshQ(); }
     return;
   }
   if (e.key == "Enter" && t.tagName == "INPUT" && !e.shiftKey) {
-    const m = { le: "auth", lp: "auth", ln: "auth", cc: "cmt", wc: "wall" }[t.id];
+    const m = { le: "auth", lp: "auth", ln: "auth", cc: "cmt", wc: "wall", mi: "msend", ci: "msend" }[t.id];
     if (m) { e.preventDefault(); $(`[data-a="${m}"]`)?.click(); }
   }
   if (e.key == "Enter" && (e.ctrlKey || e.metaKey) && t.id == "pb") $('[data-a="post"]')?.click();
@@ -643,15 +821,27 @@ document.addEventListener("input", (e) => {
     $("#" + b.id + "c").textContent = b.value.length + "/" + (k == "t" ? 80 : 500);
     return;
   }
+  if (b.id == "mi" || b.id == "ci") {
+    V.md[curC()] = b.value;
+    b.removeAttribute("aria-invalid");
+    const er = $("#merr");
+    if (er) er.textContent = "";
+    return;
+  }
+  if (b.id == "ms") {
+    V.ms = b.value;
+    $("#mlist").innerHTML = mlist(V.page == "msgs" ? "mopen" : "copen");
+    return;
+  }
   if (b.id == "q") {
     V.q = b.value;
-    const s = $("#side");
-    s.innerHTML = sideInner();
+    refreshQ();
     return;
   }
   const k = b.dataset.k;
   if (!k || !V.edit) return;
   V.edit[k] = b.isContentEditable ? b.textContent : b.value;
+  if (k == "pcw") V.edit.psz = "custom";
   if (!b.isContentEditable) {
     const sp = $("#v_" + k);
     if (sp) sp.textContent = b.value;
@@ -677,6 +867,7 @@ document.addEventListener("change", (e) => {
     pv();
   }
   if (b.dataset.up) upload(b.files[0], b.dataset.up);
+  if (b.dataset.k == "pcw") rp();
   if (b.dataset.k == "card" || b.dataset.k == "bubble" || b.dataset.k == "name")
     $("#warn").innerHTML = warn(V.edit);
 });
@@ -721,7 +912,7 @@ function act(a, v) {
       const bad = (x, m) => { er.textContent = m; x.setAttribute("aria-invalid", "true"); x.focus(); };
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return bad(E, "Please enter a valid email, like you@example.com.");
       if (p.length < 8) return bad(P, "Password needs at least 8 characters (yours has " + p.length + ").");
-      if (V.login == "up" && !n) return bad(N, "Please choose a display name.");
+      if (V.login == "up" && !n) return bad(N, "Please choose a display name. A nickname is fine.");
       if (V.login == "in" && e.toLowerCase() == DEMO.email) {
         if (p !== DEMO.pw) return bad(P, "That’s not the demo password. It’s shown below the form.");
         return loginAs(DEMO.id);
@@ -741,7 +932,7 @@ function act(a, v) {
     gm() {
       V.menu = false;
       draft();
-      V.panel = { edit: "info", look: "themes", photos: "media", arrange: "blocks", privacy: "privacy" }[v];
+      V.panel = { info: "info", themes: "themes", colors: "colors", style: "style", media: "media", layout: "layout", arrange: "blocks", privacy: "privacy" }[v];
       render();
     },
     out() {
@@ -830,9 +1021,29 @@ function act(a, v) {
       V.panel = null;
       render();
     },
+    nav() {
+      if (!discardOk()) return;
+      Object.assign(V, { edit: null, panel: null, menu: false, view: null, ret: null, enter: 1, plain: false });
+      if (v == "home" || v == "people") {
+        V.page = v;
+        if (v == "home" && S.me.seen === false) {
+          S.me.seen = true;
+          save();
+        }
+      } else {
+        V.page = null;
+        V.tab = "profile";
+      }
+      render();
+      const m = $("#main");
+      if (m) m.scrollTop = 0;
+    },
     visit() {
       if (!discardOk()) return;
+      V.ret = ["home", "people", "msgs"].includes(V.page) ? V.page : V.view ? V.ret : null;
+      V.page = null;
       V.view = v == S.me.id ? null : v;
+      if (!V.view) V.ret = null;
       V.plain = false;
       V.tab = "profile";
       V.edit = null;
@@ -841,15 +1052,16 @@ function act(a, v) {
     },
     back() {
       V.view = null;
+      if (V.ret) {
+        V.page = V.ret;
+        V.ret = null;
+        V.enter = 1;
+      }
       render();
     },
     home() {
-      if (!discardOk()) return;
-      V.view = null;
-      V.edit = null;
-      V.panel = null;
-      V.tab = "feed";
-      render();
+      v = "home";
+      A.nav();
     },
     hint() {
       S.hint = false;
@@ -947,6 +1159,7 @@ function act(a, v) {
       }
       S.posts.unshift({
         id: Date.now(),
+        ts: Date.now(),
         c: $("#pc").value,
         u: S.me.id,
         t,
@@ -960,8 +1173,134 @@ function act(a, v) {
       V.cat = "All";
       V.q = "";
       save();
+      V.fresh = S.posts[0].id;
       render();
-      toast("Posted! Your thread is at the top of the list.");
+      V.fresh = null;
+      const m = $("#main");
+      if (m) m.scrollTop = 0;
+      toast("Posted! Your post is at the top of the feed.");
+    },
+    lay() {
+      V.edit.lay = v;
+      pv();
+      rp();
+      toast((v == "timeline" ? "Centered Timeline" : "Classic") + " layout previewed. Press Save to keep it.");
+    },
+    psz() {
+      V.edit.psz = v;
+      V.edit.pcw = 0;
+      pv();
+      rp();
+    },
+    ptab() {
+      V.ptab = v;
+      V.edit ? pv() : render();
+    },
+    msgpage() {
+      if (V.page == "msgs") return;
+      if (!discardOk()) return;
+      V.edit = null;
+      V.panel = null;
+      V.menu = false;
+      V.mfrom = V.page;
+      V.page = "msgs";
+      render();
+      $("#ms")?.focus();
+    },
+    mexit() {
+      V.page = V.mfrom || null;
+      V.enter = 1;
+      render();
+      $("#mnav")?.focus();
+    },
+    mopen() {
+      V.mc = v;
+      mark(getC(v));
+      mr("#mi");
+    },
+    mback() {
+      V.mc = null;
+      mr();
+      $("#ms")?.focus();
+    },
+    mnew() {
+      V.mnew = V.mnew ? 0 : 1;
+      mr(V.mnew ? ".mpick .ftile" : "");
+    },
+    mstart() {
+      const c = mkC(v);
+      V.mnew = 0;
+      V.ms = "";
+      mark(c);
+      if (V.page == "msgs" || mobile()) {
+        V.page = "msgs";
+        V.mc = c.id;
+        render();
+        $("#mi")?.focus();
+      } else {
+        V.chat = { open: 1, min: 0, cid: c.id };
+        mr("#ci");
+      }
+    },
+    copen() {
+      V.chat.cid = v;
+      mark(getC(v));
+      mr("#ci");
+    },
+    cback() {
+      V.chat.cid = null;
+      mr("#ms");
+    },
+    cht() {
+      if (mobile()) return act("msgpage");
+      V.chat.open = 1;
+      V.chat.min = 0;
+      mr(".cw .mlist .mrow, #ci, #ms");
+    },
+    cmin() {
+      V.chat.min = !V.chat.min;
+      if (!V.chat.min) mark(getC(V.chat.cid));
+      mr(V.chat.min ? '[data-a="cmin"]' : "#ci, #ms");
+    },
+    cmax() {
+      V.mc = V.chat.cid;
+      V.chat.open = 0;
+      V.mfrom = V.page;
+      V.page = "msgs";
+      mark(getC(V.mc));
+      render();
+    },
+    ccls() {
+      V.chat = { open: 0, min: 0, cid: null };
+      mr('[data-a="cht"]');
+    },
+    msend() {
+      const i = $("#mi") || $("#ci"), c = getC(curC()), er = $("#merr");
+      if (!i || !c) return;
+      const t = i.value.trim();
+      if (!t) {
+        er.textContent = "Type a message before sending.";
+        i.setAttribute("aria-invalid", "true");
+        return i.focus();
+      }
+      if (+T(other(c).t).dm === 0) return (er.textContent = other(c).n + " has turned messages off.");
+      const ts = Date.now();
+      c.m.push({ f: S.me.id, t, ts });
+      c.rd[S.me.id] = ts;
+      delete V.md[c.id];
+      const ok = save();
+      mr("#" + i.id);
+      if (!ok) toast("Couldn’t save on this device. Storage may be full.");
+    },
+    mdel() {
+      if (!confirm("Delete this conversation from your inbox? The other person keeps their copy.")) return;
+      const c = getC(v);
+      c.hd[S.me.id] = Date.now();
+      if (V.page == "msgs") V.mc = null;
+      if (V.chat.cid == v) V.chat.cid = null;
+      save();
+      mr();
+      toast("Conversation deleted");
     },
     reset() {
       if (!confirm("Reset all demo data?")) return;
@@ -989,11 +1328,24 @@ function resetView() {
     more: 0,
     cat: "All",
     d: { t: "", b: "", c: "Regular post" },
+    page: null,
+    ret: null,
+    mfrom: null,
+    enter: 0,
+    fresh: null,
+    mc: null,
+    ms: "",
+    md: {},
+    mnew: 0,
+    ptab: "posts",
+    chat: { open: 0, min: 0, cid: null },
   });
 }
 function loginAs(id) {
   resetView();
   S.me = S.users.find((u) => u.id == id);
+  V.page = S.me.seen === false ? null : "home";
+  V.enter = 1;
   save();
   render();
   toast("Welcome back, " + S.me.n + "!");
@@ -1014,6 +1366,7 @@ function joinNow(n) {
     n,
     t: T({ bio: "CIIT student", st: "Just joined!", q: "Hello, CIIT!" }),
     wall: [],
+    seen: false,
   };
   S.users = S.users.filter((u) => u.id != "me");
   S.users.push(S.me);
@@ -1022,4 +1375,31 @@ function joinNow(n) {
   render();
   toast("Welcome, " + n + "! Make your profile your own.");
 }
+let DR = null;
+document.addEventListener("pointerdown", (e) => {
+  const h = e.target.closest?.("[data-rsz]");
+  if (!h || !V.edit) return;
+  e.preventDefault();
+  DR = { x: e.clientX, w: postW(V.edit), h };
+  h.setPointerCapture?.(e.pointerId);
+  document.body.classList.add("rszing");
+});
+document.addEventListener("pointermove", (e) => {
+  if (!DR) return;
+  const w = Math.round(Math.min(960, Math.max(360, DR.w + 2 * (e.clientX - DR.x))) / 10) * 10;
+  V.edit.pcw = w;
+  V.edit.psz = "custom";
+  $("#pw").style.setProperty("--pw", w + "px");
+  DR.h.setAttribute("aria-valuenow", w);
+  ds();
+});
+const endDrag = () => {
+  if (!DR) return;
+  DR = null;
+  document.body.classList.remove("rszing");
+  rp();
+};
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
+if (S.me && S.me.seen !== false) V.page = "home";
 render();
